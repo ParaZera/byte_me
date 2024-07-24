@@ -1,0 +1,38 @@
+name: Rust CI
+
+on:
+  push:
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  ci:
+    name: Lint, build and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install -y cmake
+      - name: Install toolchain
+        run: |
+          rustup update stable 
+          rustup default stable
+      - name: Install additional tools
+        run: |
+          rustup component add clippy llvm-tools-preview
+          cargo install grcov convco
+      - name: run clippy
+        run: cargo clippy -- --deny "warnings"
+      - name: run format checker
+        run: cargo fmt --check
+      - name: build project
+        run: cargo build --verbose
+      - name: run tests
+        run: |
+          RUSTFLAGS="-C instrument-coverage" cargo test
+          mkdir -p target/coverage
+          grcov . --binary-path ./target/debug/deps/ -s . -t html,cobertura --branch --ignore-not-existing --ignore '../*' --ignore "/*" -o target/coverage
+          cat target/coverage/html/coverage.json
