@@ -12,7 +12,7 @@ jobs:
     name: Lint, build and test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install system dependencies
         run: |
           sudo apt-get update && sudo apt-get install -y cmake
@@ -24,8 +24,10 @@ jobs:
         run: |
           rustup component add clippy llvm-tools-preview
           cargo install grcov convco
-      - name: run linter
+      - name: run clippy
         run: cargo clippy -- --deny "warnings"
+      - name: run format checker
+        run: cargo fmt --check
       - name: build project
         run: cargo build --verbose
       - name: run tests
