@@ -25,10 +25,12 @@ use ratatui::{
         self,
         event::{self, Event, KeyCode},
     },
-    layout::{Alignment, Constraint, Layout, Rect},
+    layout::{Alignment, Constraint, Flex, Layout, Rect},
     style::{Color, Style, Stylize},
+    symbols,
     text::{Line, Masked, Span},
-    widgets::{Block, BorderType, Paragraph, Widget, Wrap},
+    widgets::{Block, BorderType, Borders, Paragraph, Widget, Wrap},
+    Frame,
 };
 
 use self::common::{init_terminal, install_hooks, restore_terminal, Tui};
@@ -102,36 +104,43 @@ impl App {
 
 impl Widget for &mut App {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        Paragraph::new(vec![
-            Line::raw(
-                " 64   60   56   52   48   44   40   36   32   28   24   20   16   12   8    4     ",
+        let areas = Layout::vertical([Constraint::Length(3), Constraint::Min(0)]).split(area);
+
+        let sub_areas = Layout::horizontal([Constraint::Length(3), Constraint::Min(0)])
+            // .flex(Flex::Center)
+            .split(areas[0]);
+
+        Paragraph::new(vec![Line::raw("0x").alignment(Alignment::Center)])
+            .block(
+                Block::new()
+                    .border_set(symbols::border::PLAIN)
+                    .borders(Borders::TOP | Borders::LEFT | Borders::BOTTOM),
             )
-            .alignment(Alignment::Right),
-            Line::raw(
-                "  1234 1234 1234 1234 1234 1234 1234 1234 1234 1234 1234 1234 1234 1234 1234 1234 ",
+            .render(sub_areas[0], buf);
+        Paragraph::new(vec![Line::raw("Input Stuff").alignment(Alignment::Center)])
+            .block(
+                Block::new()
+                    .border_set(symbols::border::PLAIN)
+                    .borders(Borders::LEFT | Borders::BOTTOM | Borders::TOP | Borders::RIGHT),
             )
-            .alignment(Alignment::Right),
-        ])
-        .block(
-            Block::bordered()
-                .title(" i8 ")
-                .title_style(Style::new().bold())
-                .border_type(BorderType::Plain),
-        )
-        .render(area, buf)
-        //     let areas = Layout::vertical([Constraint::Max(9); 4]).split(area);
-        //     Paragraph::new(create_lines(area))
-        //         .alignment(Alignment::Left)
-        //         .block(title_block("Default alignment (Left), no wrap"))
-        //         .alignment(Alignment::Left)
-        //         .gray()
-        //         .render(areas[0], buf);
-        //     Paragraph::new(create_lines(area))
-        //         .block(title_block("Default alignment (Left), with wrap"))
-        //         .alignment(Alignment::Left)
-        //         .gray()
-        //         .wrap(Wrap { trim: true })
-        //         .render(areas[1], buf);
+            .render(sub_areas[1], buf);
+
+        // Paragraph::new(vec![
+        //     Line::raw(" 128        96        64        32        ")
+        //         .alignment(Alignment::Right)
+        //         .dim(),
+        //     Line::raw("  1234 1234 1234 1234 1234 1234 1234 1234 ")
+        //         .alignment(Alignment::Right)
+        //         .bold(),
+        // ])
+        // .block(
+        //     Block::bordered()
+        //         .title(" i8 ")
+        //         .title_alignment(Alignment::Left)
+        //         .title_style(Style::new().bold())
+        //         .border_type(BorderType::Double),
+        // )
+        // .render(areas[1], buf)
     }
 }
 
