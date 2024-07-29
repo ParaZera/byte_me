@@ -26,11 +26,10 @@ use ratatui::{
         event::{self, Event, KeyCode},
     },
     layout::{Alignment, Constraint, Flex, Layout, Rect},
-    style::{Color, Style, Stylize},
+    style::{Style, Stylize},
     symbols,
-    text::{Line, Masked, Span},
-    widgets::{Block, BorderType, Borders, Paragraph, Widget, Wrap},
-    Frame,
+    text::Line,
+    widgets::{Block, BorderType, Borders, Paragraph, Widget},
 };
 
 use self::common::{init_terminal, install_hooks, restore_terminal, Tui};
@@ -46,9 +45,11 @@ fn main() -> color_eyre::Result<()> {
 
 #[derive(Debug)]
 struct App {
+    blub: Blub,
     should_exit: bool,
     scroll: u16,
     last_tick: Instant,
+    number: u128,
 }
 
 impl App {
@@ -61,6 +62,8 @@ impl App {
             should_exit: false,
             scroll: 0,
             last_tick: Instant::now(),
+            blub: Blub {},
+            number: 0,
         }
     }
 
@@ -83,6 +86,17 @@ impl App {
         Ok(())
     }
 
+    fn is_hex_character(char: KeyCode) -> bool {
+        if let KeyCode::Char(char) = char {
+            return match char {
+                '0'..='9' | 'a'..='f' | 'A'..='F' => true,
+                _ => false,
+            };
+        }
+
+        false
+    }
+
     /// Handle events from the terminal.
     fn handle_events(&mut self) -> io::Result<()> {
         let timeout = Self::TICK_RATE.saturating_sub(self.last_tick.elapsed());
@@ -90,6 +104,12 @@ impl App {
             if let Event::Key(key) = event::read()? {
                 if key.kind == KeyEventKind::Press && key.code == KeyCode::Char('q') {
                     self.should_exit = true;
+                }
+
+                if key.kind == KeyEventKind::Press && App::is_hex_character(key.code) {
+                    if let KeyCode::Char(char) = key.code {
+                        self.number = u128::from_str_radix(&char.to_string(), 16).unwrap();
+                    }
                 }
             }
         }
@@ -102,12 +122,41 @@ impl App {
     }
 }
 
+#[derive(Debug)]
+struct Blub;
+
+impl Widget for &mut Blub {
+    fn render(self, area: Rect, buf: &mut Buffer)
+    where
+        Self: Sized,
+    {
+        Paragraph::new(vec![
+            Line::raw(" 128        96        64        32        ")
+                .alignment(Alignment::Right)
+                .dim(),
+            Line::raw("  1234 1234 1234 1234 1234 1234 1234 1235 ")
+                .alignment(Alignment::Right)
+                .bold(),
+        ])
+        .block(
+            Block::bordered()
+                .title(" i128 ")
+                .title_alignment(Alignment::Left)
+                .title_style(Style::new().bold())
+                .border_type(BorderType::Double),
+        )
+        .render(area, buf)
+    }
+}
+
 impl Widget for &mut App {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let areas = Layout::vertical([Constraint::Length(3), Constraint::Min(0)]).split(area);
+        let areas = Layout::vertical([Constraint::Length(3), Constraint::Min(0)])
+            .flex(Flex::Center)
+            .split(area);
 
-        let sub_areas = Layout::horizontal([Constraint::Length(3), Constraint::Min(0)])
-            // .flex(Flex::Center)
+        let sub_areas = Layout::horizontal([Constraint::Length(3), Constraint::Max(128 + 32 + 2)])
+            .flex(Flex::Center)
             .split(areas[0]);
 
         Paragraph::new(vec![Line::raw("0x").alignment(Alignment::Center)])
@@ -125,59 +174,8 @@ impl Widget for &mut App {
             )
             .render(sub_areas[1], buf);
 
-        // Paragraph::new(vec![
-        //     Line::raw(" 128        96        64        32        ")
-        //         .alignment(Alignment::Right)
-        //         .dim(),
-        //     Line::raw("  1234 1234 1234 1234 1234 1234 1234 1234 ")
-        //         .alignment(Alignment::Right)
-        //         .bold(),
-        // ])
-        // .block(
-        //     Block::bordered()
-        //         .title(" i8 ")
-        //         .title_alignment(Alignment::Left)
-        //         .title_style(Style::new().bold())
-        //         .border_type(BorderType::Double),
-        // )
-        // .render(areas[1], buf)
+        self.blub.render(areas[1], buf);
     }
-}
-
-/// Create a bordered block with a title.
-fn title_block(title: &str) -> Block {
-    Block::bordered()
-        .gray()
-        .title(title.bold().into_centered_line())
-        .title_alignment(Alignment::Left)
-}
-
-/// Create some lines to display in the paragraph.
-fn create_lines(area: Rect) -> Vec<Line<'static>> {
-    let short_line = "A long line to demonstrate line wrapping. ";
-    let long_line = short_line.repeat(usize::from(area.width) / short_line.len() + 4);
-    let mut styled_spans = vec![];
-    for span in [
-        "Styled".blue(),
-        "Spans".red().on_white(),
-        "Bold".bold(),
-        "Italic".italic(),
-        "Underlined".underlined(),
-        "Strikethrough".crossed_out(),
-    ] {
-        styled_spans.push(span);
-        styled_spans.push(" ".into());
-    }
-    vec![
-        Line::raw("Unstyled Line"),
-        Line::raw("Styled Line").black().on_red().bold().italic(),
-        Line::from(styled_spans),
-        Line::from(long_line.green().italic()),
-        Line::from_iter([
-            "Masked text: ".into(),
-            Span::styled(Masked::new("my secret password", '*'), Color::Red),
-        ]),
-    ]
 }
 
 /// A module for common functionality used in the examples.
