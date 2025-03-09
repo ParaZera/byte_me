@@ -224,15 +224,15 @@ impl App {
 
     fn handle_navigation_input(&mut self, key: KeyEvent) {
         match key.code {
-            KeyCode::Char('1') => {
+            KeyCode::Char('1') | KeyCode::Char('m') => {
                 self.active_dropdown = 0;
                 self.dropdown_open = true;
             }
-            KeyCode::Char('2') => {
+            KeyCode::Char('2') | KeyCode::Char(',') => {
                 self.active_dropdown = 1;
                 self.dropdown_open = true;
             }
-            KeyCode::Char('3') => {
+            KeyCode::Char('3') | KeyCode::Char('.') => {
                 self.active_dropdown = 2;
                 self.dropdown_open = true;
             }
@@ -245,6 +245,13 @@ impl App {
             }
             KeyCode::Char('l') => {
                 self.active_dropdown = (self.active_dropdown + 1) % 3;
+            }
+            KeyCode::Char('h') => {
+                if self.active_dropdown == 0 {
+                    self.active_dropdown = 2;
+                } else {
+                    self.active_dropdown = (self.active_dropdown - 1) % 3;
+                }
             }
             KeyCode::Enter => {
                 self.dropdown_open = true;
