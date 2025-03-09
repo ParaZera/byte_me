@@ -50,6 +50,10 @@ impl DataType {
             DataType::F64 => "f64".to_string(),
         }
     }
+
+    pub fn to_short_string(&self) -> String {
+        self.to_string()
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -67,6 +71,13 @@ impl Endianness {
         match self {
             Endianness::Little => "Little".to_string(),
             Endianness::Big => "Big".to_string(),
+        }
+    }
+
+    pub fn to_short_string(&self) -> String {
+        match self {
+            Endianness::Little => "LE".to_string(),
+            Endianness::Big => "BE".to_string(),
         }
     }
 }
@@ -98,6 +109,15 @@ impl InputFormat {
         }
     }
 
+    pub fn to_short_string(&self) -> String {
+        match self {
+            InputFormat::Binary => "Bin".to_string(),
+            InputFormat::Octal => "Oct".to_string(),
+            InputFormat::Decimal => "Dec".to_string(),
+            InputFormat::Hexadecimal => "Hex".to_string(),
+        }
+    }
+
     pub fn is_valid_char(&self, c: char) -> bool {
         match self {
             InputFormat::Binary => c == '0' || c == '1',
@@ -106,6 +126,15 @@ impl InputFormat {
             InputFormat::Hexadecimal => {
                 c.is_ascii_digit() || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
             }
+        }
+    }
+
+    pub fn number_prefix(&self) -> &'static str {
+        match self {
+            InputFormat::Binary => "0b",
+            InputFormat::Octal => "0o",
+            InputFormat::Decimal => "0d",
+            InputFormat::Hexadecimal => "0x",
         }
     }
 }
@@ -156,12 +185,12 @@ impl App {
                 self.dropdown_open = false;
                 self.dropdown_index = 0;
             }
-            KeyCode::Up => {
+            KeyCode::Up | KeyCode::Char('k') => {
                 if self.dropdown_index > 0 {
                     self.dropdown_index -= 1;
                 }
             }
-            KeyCode::Down => {
+            KeyCode::Down | KeyCode::Char('j') => {
                 let max_index = match self.active_dropdown {
                     0 => DataType::all().len() - 1,
                     1 => Endianness::all().len() - 1,

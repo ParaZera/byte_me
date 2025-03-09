@@ -65,46 +65,41 @@ fn draw_input_line<B: Backend>(f: &mut Frame, app: &App, area: Rect) {
         .direction(Direction::Horizontal)
         .constraints(
             [
-                Constraint::Length(10), // Data type dropdown
-                Constraint::Length(1),  // Separator
-                Constraint::Length(10), // Endianness dropdown
-                Constraint::Length(1),  // Separator
-                Constraint::Length(10), // Format dropdown
-                Constraint::Length(1),  // Separator
-                Constraint::Min(10),    // Number input
+                Constraint::Length(8), // Data type dropdown
+                Constraint::Length(1), // Separator
+                Constraint::Length(8), // Endianness dropdown
+                Constraint::Length(1), // Separator
+                Constraint::Length(8), // Format dropdown
+                Constraint::Length(1), // Separator
+                Constraint::Min(10),   // Number input
             ]
             .as_ref(),
         )
         .split(area);
 
     // Data type dropdown
-    let data_type_text = format!("[ {} ]", app.data_type.to_string());
+    let data_type_text = format!("[ {} ]", app.data_type.to_short_string());
     let data_type_widget = Paragraph::new(data_type_text)
         .style(data_type_style)
         .block(Block::default().borders(Borders::NONE));
     f.render_widget(data_type_widget, input_segments[0]);
 
     // Endianness dropdown
-    let endianness_text = format!("[ {} ]", app.endianness.to_string());
+    let endianness_text = format!("[ {} ]", app.endianness.to_short_string());
     let endianness_widget = Paragraph::new(endianness_text)
         .style(endianness_style)
         .block(Block::default().borders(Borders::NONE));
     f.render_widget(endianness_widget, input_segments[2]);
 
     // Format dropdown
-    let format_text = format!("[ {} ]", app.input_format.to_string());
+    let format_text = format!("[ {} ]", app.input_format.to_short_string());
     let format_widget = Paragraph::new(format_text)
         .style(format_style)
         .block(Block::default().borders(Borders::NONE));
     f.render_widget(format_widget, input_segments[4]);
 
     // Number input with prefix
-    let prefix = match app.input_format {
-        InputFormat::Binary => "0b",
-        InputFormat::Octal => "0o",
-        InputFormat::Decimal => "0d",
-        InputFormat::Hexadecimal => "0x",
-    };
+    let prefix = app.input_format.number_prefix();
 
     let input_text = format!("{}{}", prefix, app.input);
     let input_widget = Paragraph::new(input_text)
