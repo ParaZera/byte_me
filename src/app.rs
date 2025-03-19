@@ -1,306 +1,178 @@
-use crossterm::event::{KeyCode, KeyEvent};
+use color_eyre::Result;
+use crossterm::event::KeyEvent;
+use ratatui::prelude::Rect;
+use serde::{Deserialize, Serialize};
+use tokio::sync::mpsc;
+use tracing::{debug, info};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DataType {
-    U8,
-    U16,
-    U32,
-    U64,
-    U128,
-    I8,
-    I16,
-    I32,
-    I64,
-    I128,
-    F32,
-    F64,
-}
-
-impl DataType {
-    pub fn all() -> Vec<DataType> {
-        vec![
-            DataType::U8,
-            DataType::U16,
-            DataType::U32,
-            DataType::U64,
-            DataType::U128,
-            DataType::I8,
-            DataType::I16,
-            DataType::I32,
-            DataType::I64,
-            DataType::I128,
-            DataType::F32,
-            DataType::F64,
-        ]
-    }
-
-    pub fn to_string(&self) -> String {
-        match self {
-            DataType::U8 => "u8".to_string(),
-            DataType::U16 => "u16".to_string(),
-            DataType::U32 => "u32".to_string(),
-            DataType::U64 => "u64".to_string(),
-            DataType::U128 => "u128".to_string(),
-            DataType::I8 => "i8".to_string(),
-            DataType::I16 => "i16".to_string(),
-            DataType::I32 => "i32".to_string(),
-            DataType::I64 => "i64".to_string(),
-            DataType::I128 => "i128".to_string(),
-            DataType::F32 => "f32".to_string(),
-            DataType::F64 => "f64".to_string(),
-        }
-    }
-
-    pub fn to_short_string(&self) -> String {
-        self.to_string()
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Endianness {
-    Little,
-    Big,
-}
-
-impl Endianness {
-    pub fn all() -> Vec<Endianness> {
-        vec![Endianness::Little, Endianness::Big]
-    }
-
-    pub fn to_string(&self) -> String {
-        match self {
-            Endianness::Little => "Little".to_string(),
-            Endianness::Big => "Big".to_string(),
-        }
-    }
-
-    pub fn to_short_string(&self) -> String {
-        match self {
-            Endianness::Little => "LE".to_string(),
-            Endianness::Big => "BE".to_string(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum InputFormat {
-    Binary,
-    Octal,
-    Decimal,
-    Hexadecimal,
-}
-
-impl InputFormat {
-    pub fn all() -> Vec<InputFormat> {
-        vec![
-            InputFormat::Binary,
-            InputFormat::Octal,
-            InputFormat::Decimal,
-            InputFormat::Hexadecimal,
-        ]
-    }
-
-    pub fn to_string(&self) -> String {
-        match self {
-            InputFormat::Binary => "Binary".to_string(),
-            InputFormat::Octal => "Octal".to_string(),
-            InputFormat::Decimal => "Decimal".to_string(),
-            InputFormat::Hexadecimal => "Hex".to_string(),
-        }
-    }
-
-    pub fn to_short_string(&self) -> String {
-        match self {
-            InputFormat::Binary => "Bin".to_string(),
-            InputFormat::Octal => "Oct".to_string(),
-            InputFormat::Decimal => "Dec".to_string(),
-            InputFormat::Hexadecimal => "Hex".to_string(),
-        }
-    }
-
-    pub fn is_valid_char(&self, c: char) -> bool {
-        match self {
-            InputFormat::Binary => c == '0' || c == '1',
-            InputFormat::Octal => c >= '0' && c <= '7',
-            InputFormat::Decimal => c.is_ascii_digit(),
-            InputFormat::Hexadecimal => {
-                c.is_ascii_digit() || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
-            }
-        }
-    }
-
-    pub fn number_prefix(&self) -> &'static str {
-        match self {
-            InputFormat::Binary => "0b",
-            InputFormat::Octal => "0o",
-            InputFormat::Decimal => "0d",
-            InputFormat::Hexadecimal => "0x",
-        }
-    }
-}
+use crate::{
+    action::Action,
+    component::Component,
+    components::{fps::FpsCounter, home::Home},
+    config::Config,
+    tui::{Event, Tui},
+};
 
 pub struct App {
-    pub input: String,
-    pub input_mode: bool,
-    pub dropdown_open: bool,
-    pub active_dropdown: usize,
-    pub dropdown_index: usize,
-    pub data_type: DataType,
-    pub endianness: Endianness,
-    pub input_format: InputFormat,
+    config: Config,
+    tick_rate: f64,
+    frame_rate: f64,
+    components: Vec<Box<dyn Component>>,
+    should_quit: bool,
+    should_suspend: bool,
+    mode: Mode,
+    last_tick_key_events: Vec<KeyEvent>,
+    action_tx: mpsc::UnboundedSender<Action>,
+    action_rx: mpsc::UnboundedReceiver<Action>,
+}
+
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Mode {
+    #[default]
+    Home,
 }
 
 impl App {
-    pub fn new() -> Self {
-        App {
-            input: String::new(),
-            input_mode: false,
-            dropdown_open: false,
-            active_dropdown: 0,
-            dropdown_index: 0,
-            data_type: DataType::U32,
-            endianness: Endianness::Little,
-            input_format: InputFormat::Decimal,
-        }
+    pub fn new(tick_rate: f64, frame_rate: f64) -> Result<Self> {
+        let (action_tx, action_rx) = mpsc::unbounded_channel();
+        Ok(Self {
+            tick_rate,
+            frame_rate,
+            components: vec![Box::new(Home::new()), Box::new(FpsCounter::default())],
+            should_quit: false,
+            should_suspend: false,
+            config: Config::new()?,
+            mode: Mode::Home,
+            last_tick_key_events: Vec::new(),
+            action_tx,
+            action_rx,
+        })
     }
 
-    pub fn handle_input(&mut self, key: KeyEvent) {
-        if self.dropdown_open {
-            self.handle_dropdown_input(key);
-        } else if self.input_mode {
-            self.handle_text_input(key);
-        } else {
-            self.handle_navigation_input(key);
+    pub async fn run(&mut self) -> Result<()> {
+        let mut tui = Tui::new()?
+            // .mouse(true) // uncomment this line to enable mouse support
+            .tick_rate(self.tick_rate)
+            .frame_rate(self.frame_rate);
+        tui.enter()?;
+
+        for component in self.components.iter_mut() {
+            component.register_action_handler(self.action_tx.clone())?;
         }
+        for component in self.components.iter_mut() {
+            component.register_config_handler(self.config.clone())?;
+        }
+        for component in self.components.iter_mut() {
+            component.init(tui.size()?)?;
+        }
+
+        let action_tx = self.action_tx.clone();
+        loop {
+            self.handle_events(&mut tui).await?;
+            self.handle_actions(&mut tui)?;
+            if self.should_suspend {
+                tui.suspend()?;
+                action_tx.send(Action::Resume)?;
+                action_tx.send(Action::ClearScreen)?;
+                // tui.mouse(true);
+                tui.enter()?;
+            } else if self.should_quit {
+                tui.stop()?;
+                break;
+            }
+        }
+        tui.exit()?;
+        Ok(())
     }
 
-    fn handle_dropdown_input(&mut self, key: KeyEvent) {
-        match key.code {
-            KeyCode::Esc => {
-                self.dropdown_open = false;
-                self.dropdown_index = 0;
+    async fn handle_events(&mut self, tui: &mut Tui) -> Result<()> {
+        let Some(event) = tui.next_event().await else {
+            return Ok(());
+        };
+        let action_tx = self.action_tx.clone();
+        match event {
+            Event::Quit => action_tx.send(Action::Quit)?,
+            Event::Tick => action_tx.send(Action::Tick)?,
+            Event::Render => action_tx.send(Action::Render)?,
+            Event::Resize(x, y) => action_tx.send(Action::Resize(x, y))?,
+            Event::Key(key) => self.handle_key_event(key)?,
+            _ => {}
+        }
+        for component in self.components.iter_mut() {
+            if let Some(action) = component.handle_events(Some(event.clone()))? {
+                action_tx.send(action)?;
             }
-            KeyCode::Enter => {
-                self.select_dropdown_item();
-                self.dropdown_open = false;
-                self.dropdown_index = 0;
+        }
+        Ok(())
+    }
+
+    fn handle_key_event(&mut self, key: KeyEvent) -> Result<()> {
+        let action_tx = self.action_tx.clone();
+        let Some(keymap) = self.config.keybindings.get(&self.mode) else {
+            return Ok(());
+        };
+        match keymap.get(&vec![key]) {
+            Some(action) => {
+                info!("Got action: {action:?}");
+                action_tx.send(action.clone())?;
             }
-            KeyCode::Up | KeyCode::Char('k') => {
-                if self.dropdown_index > 0 {
-                    self.dropdown_index -= 1;
+            _ => {
+                // If the key was not handled as a single key action,
+                // then consider it for multi-key combinations.
+                self.last_tick_key_events.push(key);
+
+                // Check for multi-key combinations
+                if let Some(action) = keymap.get(&self.last_tick_key_events) {
+                    info!("Got action: {action:?}");
+                    action_tx.send(action.clone())?;
                 }
             }
-            KeyCode::Down | KeyCode::Char('j') => {
-                let max_index = match self.active_dropdown {
-                    0 => DataType::all().len() - 1,
-                    1 => Endianness::all().len() - 1,
-                    2 => InputFormat::all().len() - 1,
-                    _ => 0,
+        }
+        Ok(())
+    }
+
+    fn handle_actions(&mut self, tui: &mut Tui) -> Result<()> {
+        while let Ok(action) = self.action_rx.try_recv() {
+            if action != Action::Tick && action != Action::Render {
+                debug!("{action:?}");
+            }
+            match action {
+                Action::Tick => {
+                    self.last_tick_key_events.drain(..);
+                }
+                Action::Quit => self.should_quit = true,
+                Action::Suspend => self.should_suspend = true,
+                Action::Resume => self.should_suspend = false,
+                Action::ClearScreen => tui.terminal.clear()?,
+                Action::Resize(w, h) => self.handle_resize(tui, w, h)?,
+                Action::Render => self.render(tui)?,
+                _ => {}
+            }
+            for component in self.components.iter_mut() {
+                if let Some(action) = component.update(action.clone())? {
+                    self.action_tx.send(action)?
                 };
-                if self.dropdown_index < max_index {
-                    self.dropdown_index += 1;
+            }
+        }
+        Ok(())
+    }
+
+    fn handle_resize(&mut self, tui: &mut Tui, w: u16, h: u16) -> Result<()> {
+        tui.resize(Rect::new(0, 0, w, h))?;
+        self.render(tui)?;
+        Ok(())
+    }
+
+    fn render(&mut self, tui: &mut Tui) -> Result<()> {
+        tui.draw(|frame| {
+            for component in self.components.iter_mut() {
+                if let Err(err) = component.draw(frame, frame.area()) {
+                    let _ = self
+                        .action_tx
+                        .send(Action::Error(format!("Failed to draw: {:?}", err)));
                 }
             }
-            _ => {}
-        }
-    }
-
-    fn handle_text_input(&mut self, key: KeyEvent) {
-        match key.code {
-            KeyCode::Esc => {
-                self.input_mode = false;
-            }
-            KeyCode::Char(c) => {
-                if self.input_format.is_valid_char(c) {
-                    self.input.push(c);
-                }
-            }
-            KeyCode::Backspace => {
-                self.input.pop();
-            }
-            _ => {}
-        }
-    }
-
-    fn handle_navigation_input(&mut self, key: KeyEvent) {
-        match key.code {
-            KeyCode::Char('1') | KeyCode::Char('m') => {
-                self.active_dropdown = 0;
-                self.dropdown_open = true;
-            }
-            KeyCode::Char('2') | KeyCode::Char(',') => {
-                self.active_dropdown = 1;
-                self.dropdown_open = true;
-            }
-            KeyCode::Char('3') | KeyCode::Char('.') => {
-                self.active_dropdown = 2;
-                self.dropdown_open = true;
-            }
-            KeyCode::Char('i') => {
-                self.input_mode = true;
-            }
-            KeyCode::Tab => {
-                self.active_dropdown = (self.active_dropdown + 1) % 3;
-                self.dropdown_open = true;
-            }
-            KeyCode::Char('l') => {
-                self.active_dropdown = (self.active_dropdown + 1) % 3;
-            }
-            KeyCode::Char('h') => {
-                if self.active_dropdown == 0 {
-                    self.active_dropdown = 2;
-                } else {
-                    self.active_dropdown = (self.active_dropdown - 1) % 3;
-                }
-            }
-            KeyCode::Enter => {
-                self.dropdown_open = true;
-            }
-            _ => {}
-        }
-    }
-
-    fn select_dropdown_item(&mut self) {
-        match self.active_dropdown {
-            0 => {
-                self.data_type = DataType::all()[self.dropdown_index];
-            }
-            1 => {
-                self.endianness = Endianness::all()[self.dropdown_index];
-            }
-            2 => {
-                self.input_format = InputFormat::all()[self.dropdown_index];
-            }
-            _ => {}
-        }
-    }
-
-    pub fn get_conversion_results(&self) -> Vec<(String, String)> {
-        if self.input.is_empty() {
-            return vec![(
-                "No input".to_string(),
-                "Enter a value to see conversions".to_string(),
-            )];
-        }
-
-        // Convert the input string to a value based on the input format
-        let value = match self.parse_input() {
-            Some(v) => v,
-            None => return vec![("Error".to_string(), "Failed to parse input".to_string())],
-        };
-
-        // Generate conversion results using the converter trait
-        crate::converter::get_conversions(value, self.data_type, self.endianness)
-    }
-
-    fn parse_input(&self) -> Option<u128> {
-        let radix = match self.input_format {
-            InputFormat::Binary => 2,
-            InputFormat::Octal => 8,
-            InputFormat::Decimal => 10,
-            InputFormat::Hexadecimal => 16,
-        };
-
-        u128::from_str_radix(&self.input, radix).ok()
+        })?;
+        Ok(())
     }
 }

@@ -1,57 +1,26 @@
-use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
-    execute,
-    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
-};
-use ratatui::{Terminal, backend::CrosstermBackend};
-use std::error::Error;
+use clap::Parser;
+use cli::Cli;
+use color_eyre::Result;
 
+use crate::app::App;
+
+mod action;
 mod app;
-mod converter;
-mod ui;
+mod cli;
+mod component;
+mod components;
+mod config;
+mod errors;
+mod logging;
+mod tui;
 
-use app::App;
+#[tokio::main]
+async fn main() -> Result<()> {
+    crate::errors::init()?;
+    crate::logging::init()?;
 
-fn main() -> Result<(), Box<dyn Error>> {
-    // Setup terminal
-    enable_raw_mode()?;
-    let mut stdout = std::io::stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
-    let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
-
-    // Create app and run it
-    let app = App::new();
-    let res = run_app(&mut terminal, app);
-
-    // Restore terminal
-    disable_raw_mode()?;
-    execute!(
-        terminal.backend_mut(),
-        LeaveAlternateScreen,
-        DisableMouseCapture
-    )?;
-    terminal.show_cursor()?;
-
-    if let Err(err) = res {
-        println!("{:?}", err);
-    }
-
+    let args = Cli::parse();
+    let mut app = App::new(args.tick_rate, args.frame_rate)?;
+    app.run().await?;
     Ok(())
-}
-
-fn run_app(
-    terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
-    mut app: App,
-) -> Result<(), Box<dyn Error>> {
-    loop {
-        terminal.draw(|frame| ui::draw::<CrosstermBackend<std::io::Stdout>>(frame, &app))?;
-
-        if let Event::Key(key) = event::read()? {
-            match key.code {
-                KeyCode::Char('q') => return Ok(()),
-                _ => app.handle_input(key),
-            }
-        }
-    }
 }
